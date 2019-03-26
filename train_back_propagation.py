@@ -186,7 +186,7 @@ class NumpyEncoder(json.JSONEncoder):
             return obj.tolist()
         return json.JSONEncoder.default(self, obj)
         
-def train(file_name, learning_rate):
+def train(file_name, learning_rate, target_step=sys.maxsize):
     # x, y = generate_linear(100)
     x, y = generate_XOR_easy()
     if DEBUG:
@@ -202,7 +202,7 @@ def train(file_name, learning_rate):
     if not os.path.exists(folder_name):
         os.makedirs(folder_name)
     count = 1
-    while count:
+    while count < target_step:
         loss_list = []
         for inp, gt in list(zip(x, y)):
             nn_res = result_NN.forward(inp, gt)
@@ -212,7 +212,7 @@ def train(file_name, learning_rate):
         if count % CHECK_POINT == 0:
             print('epoch', count, 'Loss with MSE', np.max(loss_list))
             print('Weights:', result_NN.get_w())
-            with open(os.path.join(folder_name, file_name + CHECK_POINT + '.json'), 'w') as f:
+            with open(os.path.join(folder_name, file_name + str(count) + '.json'), 'w') as f:
                 json.dump({'weight': result_NN.get_w()}, f, cls=NumpyEncoder)
             with open(os.path.join(folder_name, file_name + '.json'), 'w') as f:
                 json.dump({'weight': result_NN.get_w()}, f, cls=NumpyEncoder)
@@ -232,6 +232,7 @@ def test(file_name):
 if __name__ == "__main__":
     file_name = 'XOR08'
     train(file_name, 0.8)
-    # test(file_name)
+    load_path = os.path.join('03_26_03-37', file_name)
+    # test(load_path)
     sys.stdout.flush()
     sys.exit()
