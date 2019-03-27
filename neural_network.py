@@ -3,10 +3,11 @@ import os
 import json
 from datetime import datetime
 from argparse import ArgumentParser
+from pprint import pprint
 
 import numpy as np
 
-CHECK_POINT = 5000
+CHECK_POINT = 100
 
 
 def sigmoid(x):
@@ -196,6 +197,7 @@ def test(file_name, training_type='xor'):
         res, _ = test_NN.go_forward(inp, gt)
         NN_res.append(res[0])
     # print(list(zip(NN_res, y)))
+    pprint(NN_res)
     NN_res = np.array(NN_res)
     show_result(x, y.reshape(y.size), NN_res.reshape(NN_res.size))
 
@@ -214,7 +216,7 @@ if __name__ == "__main__":
     if args.train_or_test == 'train':
         train(args.file_name, args.learning_rate, args.t_type)
     elif args.train_or_test == 'test':
-        test(args.file_name)
+        test(args.file_name, args.t_type)
     else:
         print('Usage: python train_back_propagation.py <train | test> <linear | xor> <OUTPUT FILENAME>')
     sys.stdout.flush()
