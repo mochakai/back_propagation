@@ -5,7 +5,7 @@ from datetime import datetime
 
 import numpy as np
 
-CHECK_POINT = 50000
+CHECK_POINT = 500
 LOGGER = False
 DEBUG = False
 
@@ -14,16 +14,22 @@ def sigmoid(x):
 
 def derivative_sigmoid(x):
     return np.multiply(x, 1.0 - x)
+    
 
 def loss_func(outputs, ground_truth):
-    mse = np.square(ground_truth - outputs) / 2
-    return mse
+    x = (1 - 2 * ground_truth) * outputs
+    softplus = np.log(1 + np.exp(x))
+    return softplus
+    # mse = np.square(ground_truth - outputs) / 2
+    # return mse
 
 def derivative_loss_func(outputs, ground_truth):
-    if len(outputs) != len(ground_truth):
-        raise Exception('ground_truth shape different from outputs')
-    derivative_mse = (outputs - ground_truth)
-    return derivative_mse
+    # if len(outputs) != len(ground_truth):
+    #     raise Exception('ground_truth shape different from outputs')
+    derivative_softplus = (1 - 2 * ground_truth) / (1 + np.exp((-1) * (1 - 2 * ground_truth) * outputs))
+    return derivative_softplus
+    # derivative_mse = (outputs - ground_truth)
+    # return derivative_mse
 
 def debug_log(*args):
     if LOGGER:
@@ -48,9 +54,9 @@ class NeuralNet():
         layer_input = inputs
         for idx, layer in enumerate(self.layers):
             if idx == len(self.layers)-1:
-                layer_input = layer.cal_outputs(layer_input)
-                debug_log(layer_input, gt)
-                return loss_func(layer_input, gt)
+                output = layer.cal_outputs(layer_input, True)
+                debug_log(output, gt)
+                return loss_func(output, gt)
             layer_input = layer.cal_outputs(layer_input)
         # return layer_input
 
@@ -63,14 +69,17 @@ class NeuralNet():
             debug_log('Layer ', layer_idx)
             if len(pre_delta) == 0:
                 error = derivative_loss_func(self.layers[layer_idx].outputs, ground_truths)
-                delta = self.layers[layer_idx].cal_delta(error)
+                delta = self.layers[layer_idx].cal_delta(error, True)
             else:
+                if pre_delta.size == 1:
+                    pre_delta = pre_delta.reshape((1,1))
                 error = np.matmul(self.layers[layer_idx+1].weights, pre_delta)
+                # print('error: ', self.layers[layer_idx+1].weights, 'X', pre_delta, '=', np.matmul(self.layers[layer_idx+1].weights, pre_delta))
                 delta = self.layers[layer_idx].cal_delta(error)
             pre_delta = delta
-        for idx, l in enumerate(self.layers):
-            l.fix_weights(self.learning_rate)
-            debug_log("layer", idx, 'new_weights:', l.weights)
+        for layer_idx in range(len(self.layers)-1, -1, -1):
+            self.layers[layer_idx].fix_weights(self.learning_rate)
+            debug_log("layer", layer_idx, 'new_weights:', self.layers[layer_idx].weights)
 
     def insert_weight(self, weight_dict):
         for val in weight_dict.values():
@@ -83,6 +92,9 @@ class NeuralNet():
         for i in inputs:
             layer_input = i
             for idx, layer in enumerate(self.layers):
+                if idx == len(self.layers)-1:
+                    outpot = layer.cal_outputs(layer_input, True)
+                    return sigmoid(outpot)
                 layer_input = layer.cal_outputs(layer_input)
             res.append(layer_input)
         return res
@@ -116,27 +128,43 @@ class Neurons():
             count *= n
         for i in range(count):
             res.append(i)
-        if count == 2:
-            res = [0.4, 0.5, 0.45, 0.55]
-        elif count == 4:
-            res = [0.15, 0.25, 0.2, 0.3]
         if DEBUG:
-            return np.reshape(res, (2,2))
+            if count == 2:
+                res = np.array([0.4, 0.5])
+            elif count == 4:
+                res = np.array([[0.15, 0.25], [0.2, 0.3]])
+            return res
+        # if count == 2:
+        #     res = [0.4, 0.5, 0.45, 0.55]
+        # elif count == 4:
+        #     res = [0.15, 0.25, 0.2, 0.3]
+        # if DEBUG:
+        #     return np.reshape(res, (2,2))
         return np.random.uniform(0.001, 1, weights_shape)
 
-    def cal_outputs(self, inputs):
+    def cal_outputs(self, inputs, last=False):
         if len(inputs) != len(self.weights):
             raise Exception('inputs error')
         self.inputs = np.reshape(inputs, (len(inputs),1))
-        self.outputs = sigmoid(np.matmul(self.weights.T, inputs) + self.bias)
+        if last:
+            self.outputs = np.matmul(self.weights.T, inputs) + self.bias
+        else:
+            self.outputs = sigmoid(np.matmul(self.weights.T, inputs) + self.bias)
         debug_log(self.weights.T, '*', self.inputs, '+', self.bias, '=', self.outputs)
         # self.outputs = self.outputs.reshape((len(self.outputs),1))
         return self.outputs
 
-    def cal_delta(self, error):
+    def cal_delta(self, error, last=False):
         debug_log('delta: ', error, '*', derivative_sigmoid(self.outputs))
         debug_log('self.outputs: ', self.outputs)
-        self.delta = np.multiply(error, derivative_sigmoid(self.outputs))
+        if last:
+            self.delta = error
+        else:
+            der_sig = derivative_sigmoid(self.outputs)
+            if len(der_sig) > 1 and der_sig.ndim == 1:
+                der_sig = np.reshape(der_sig, (len(der_sig), 1))
+            # print('---------------', error, der_sig)
+            self.delta = np.multiply(error, der_sig)
         if not isinstance(self.delta, type(np.array([]))):
             self.delta = np.array([self.delta])
         debug_log( '=', self.delta)
@@ -178,7 +206,7 @@ def generate_XOR_easy():
     return np.array(inputs), np.array(labels).reshape(21, 1)
 
 def gen_input():
-    return [[.1, .1], [.1, .1], [.5, .5]], np.array([1, 1, 0])
+    return [[.1, .1], [.1, .1], [.5, .5]], np.array([[1], [1], [0]])
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -231,7 +259,7 @@ def test(file_name):
 
 if __name__ == "__main__":
     file_name = 'XOR08'
-    train(file_name, 0.8)
+    train(file_name, 0.5)
     load_path = os.path.join('03_26_03-37', file_name)
     # test(load_path)
     sys.stdout.flush()
